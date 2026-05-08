@@ -18,56 +18,16 @@ $pageTitle = "DailyToinks - Your Trusted Electronics Store";
     <main>
         <div class="container">
             <!-- Banner Slider -->
-            <style>
-                .banner-css {
-                    width: 100%;
-                    aspect-ratio: 16/5;
-                    border-radius: 12px;
-                    display: flex;
-                    align-items: center;
-                    padding: 2rem 3rem;
-                    color: #fff;
-                    overflow: hidden;
-                    position: relative;
-                }
-                .banner-css h2 { font-size: clamp(1.4rem, 3vw, 2.4rem); margin: 0 0 0.4rem; font-weight: 800; line-height: 1.1; }
-                .banner-css p { font-size: clamp(0.85rem, 1.4vw, 1.1rem); margin: 0; opacity: 0.95; }
-                .banner-css .badge {
-                    display: inline-block; padding: 0.25rem 0.7rem; background: rgba(255,255,255,0.25);
-                    border-radius: 999px; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.6rem;
-                    backdrop-filter: blur(4px); letter-spacing: 0.5px;
-                }
-                .banner-flash    { background: linear-gradient(135deg, #C1001A 0%, #FF5722 50%, #FFC107 100%); }
-                .banner-shipping { background: linear-gradient(135deg, #1976D2 0%, #00BCD4 100%); }
-                .banner-arrivals { background: linear-gradient(135deg, #6A1B9A 0%, #E91E63 100%); }
-            </style>
             <div class="banner-slider">
                 <div class="banner-slide active">
-                    <div class="banner-css banner-flash">
-                        <div>
-                            <span class="badge">⚡ LIMITED TIME</span>
-                            <h2>Flash Sale</h2>
-                            <p>Up to 70% OFF on Electronics</p>
-                        </div>
-                    </div>
+                    <img src="images/flash_sale_banner.png" alt="Flash Sale - Up to 70% OFF on Electronics">
                 </div>
                 <div class="banner-slide">
-                    <div class="banner-css banner-shipping">
-                        <div>
-                            <span class="badge">🚚 FREE DELIVERY</span>
-                            <h2>Free Shipping</h2>
-                            <p>On tech orders over ₱2,500</p>
-                        </div>
-                    </div>
+                    <img src="images/free_shipping_banner.png" alt="Free Shipping on tech orders over ₱2,500">
                 </div>
                 <div class="banner-slide">
-                    <div class="banner-css banner-arrivals">
-                        <div>
-                            <span class="badge">✨ JUST IN</span>
-                            <h2>New Arrivals</h2>
-                            <p>Latest smartphones, laptops &amp; gadgets</p>
-                        </div>
-                    </div>
+                    <img src="images/new_arrivals_banner.png"
+                        alt="New Arrivals - Latest smartphones, laptops & gadgets">
                 </div>
                 <div class="slider-controls">
                     <span class="slider-dot active"></span>
