@@ -22,6 +22,7 @@ if (time() - ($_SESSION['mfa_setup_timestamp'] ?? 0) > 600) {
 }
 
 $mfaToken = $_SESSION['mfa_setup_token'];
+$csrfToken = generateCsrfToken();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -29,6 +30,7 @@ $mfaToken = $_SESSION['mfa_setup_token'];
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($csrfToken); ?>">
     <title>MFA Setup Required - DailyToinks</title>
     <link rel="stylesheet" href="/normss/css/styles.css">
     <style>
@@ -199,12 +201,18 @@ $mfaToken = $_SESSION['mfa_setup_token'];
         <a href="/normss/api/auth.php?action=logout" class="logout-link">← Cancel and logout</a>
     </div>
 
-    <script src="/normss/js/app.js"></script>
+    <!-- VERSION: <?php echo date('YmdHis'); ?> -->
+    <script src="/normss/js/app.js?v=<?php echo date('YmdHi'); ?>"></script>
     <script>
+        console.log('MFA Setup page version: <?php echo date('YmdHis'); ?>');
         const mfaToken = <?php echo json_encode($mfaToken); ?>;
 
         // Load setup data on page load
-        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = meta ? meta.getAttribute('content') : '';
+        if (!csrfToken) {
+            document.getElementById('qr-box').innerHTML = '<div style="color:#B71C1C;padding:1rem;">CSRF token meta tag missing</div>';
+        }
 
         async function loadSetup() {
             const fd = new FormData();
