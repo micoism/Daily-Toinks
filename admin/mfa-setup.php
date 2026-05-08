@@ -210,22 +210,32 @@ $mfaToken = $_SESSION['mfa_setup_token'];
             const fd = new FormData();
             fd.append('action', 'pending-mfa-setup');
             fd.append('csrf_token', csrfToken);
+            const qrBox = document.getElementById('qr-box');
+            const secretDisplay = document.getElementById('secret-display');
             try {
                 const res = await fetch('/normss/api/auth.php', {
                     method: 'POST', body: fd,
                     headers: { 'X-CSRF-Token': csrfToken }
                 });
-                const data = await res.json();
-                if (!data.success) {
-                    alert(data.message || 'Failed to load setup');
-                    window.location.href = '/normss/login.php';
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseErr) {
+                    qrBox.innerHTML = '<div style="color:#B71C1C;padding:1rem;font-size:0.8rem;">Server error (HTTP ' + res.status + '): ' + text.substring(0, 200).replace(/</g,'&lt;') + '</div>';
+                    secretDisplay.textContent = 'Error';
                     return;
                 }
-                document.getElementById('qr-box').innerHTML =
-                    `<img src="${data.qr_url}" alt="QR Code">`;
-                document.getElementById('secret-display').textContent = data.secret;
+                if (!data.success) {
+                    qrBox.innerHTML = '<div style="color:#B71C1C;padding:1rem;font-size:0.85rem;">' + (data.message || 'Failed to load setup') + '</div>';
+                    secretDisplay.textContent = 'Failed';
+                    return;
+                }
+                qrBox.innerHTML = '<img src="' + data.qr_url + '" alt="QR Code">';
+                secretDisplay.textContent = data.secret;
             } catch (e) {
-                alert('Network error. Please try again.');
+                qrBox.innerHTML = '<div style="color:#B71C1C;padding:1rem;font-size:0.85rem;">Network error: ' + e.message + '</div>';
+                secretDisplay.textContent = 'Error';
             }
         }
 
