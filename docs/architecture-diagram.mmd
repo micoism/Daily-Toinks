@@ -1,0 +1,44 @@
+%% DailyToinks - System Architecture Diagram
+%% Render at: https://mermaid.live
+%% Then: Actions -> PNG / SVG download
+
+flowchart TB
+    subgraph CLIENT["🖥️  PRESENTATION TIER (Client / Browser)"]
+        direction LR
+        STORE["Customer Storefront<br/>HTML5 / CSS3 / JS<br/><br/>index.php · products.php<br/>cart.php · checkout.php<br/>account.php · login.php"]
+        ADMIN["Admin / Manager / Rider Dashboard<br/>HTML5 / CSS3 / JS<br/><br/>admin/index.php · products.php<br/>orders.php · users.php<br/>locked-accounts.php · audit-logs.php"]
+    end
+
+    subgraph SERVER["⚙️  APPLICATION TIER (Server)"]
+        direction TB
+        APIS["REST-style API Endpoints<br/><b>api/*.php</b><br/><br/>auth · profile · products · orders<br/>users · reviews · tickets · payments<br/>dashboard · product-images · paymongo-webhook"]
+        CORE["Cross-cutting Layer<br/><b>config/*.php</b><br/><br/>auth.php (RBAC, session)<br/>security.php (lockout, password policy, AES-256)<br/>csrf.php · database.php (PDO) · mailer.php"]
+        APIS --- CORE
+    end
+
+    subgraph DATA["🗄️  DATA TIER"]
+        DB[("MySQL — dailytoinks_db<br/><br/>users · products · orders · order_items<br/>categories · reviews · tickets · cart<br/>audit_logs · locked_accounts<br/>login_attempts · system_settings")]
+    end
+
+    subgraph EXT["🌐  EXTERNAL SERVICES"]
+        PAY["💳 PayMongo<br/>Card Payments"]
+        MAIL["✉️ SMTP / PHPMailer<br/>Email Verification & Reset"]
+        TOTP["🔐 Google Authenticator<br/>TOTP / MFA"]
+    end
+
+    STORE -- "HTTPS · JSON · CSRF token" --> APIS
+    ADMIN -- "HTTPS · JSON · CSRF token" --> APIS
+    CORE  -- "PDO prepared statements" --> DB
+    APIS  --> PAY
+    CORE  --> MAIL
+    CORE  --> TOTP
+
+    classDef client fill:#FFF5F5,stroke:#E04E4E,stroke-width:2px,color:#222
+    classDef server fill:#FFF8E1,stroke:#F2A83B,stroke-width:2px,color:#222
+    classDef data   fill:#E8F5E9,stroke:#3DAA5C,stroke-width:2px,color:#222
+    classDef ext    fill:#E3F2FD,stroke:#1E88E5,stroke-width:2px,color:#222
+
+    class STORE,ADMIN client
+    class APIS,CORE server
+    class DB data
+    class PAY,MAIL,TOTP ext

@@ -1,0 +1,55 @@
+# ===================================
+# DAILYTOINKS - GITIGNORE
+# ===================================
+
+# Configuration files with sensitive data - DO NOT COMMIT ACTUAL CREDENTIALS
+# Copy from .example files and fill in your own values
+/config/mail.php
+/config/database.php
+.env
+.env.local
+
+# Uploads directory (user content)
+uploads/products/*
+uploads/profiles/*
+!uploads/products/.gitkeep
+!uploads/profiles/.gitkeep
+
+# Logs
+logs/*
+*.log
+error.log
+access.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.settings/
+
+# Dependency directories
+vendor/
+node_modules/
+
+# Backup files
+*.bak
+*.swp
+*.tmp
+*~
+
+# Session files
+sessions/
+tmp/
+cache/
