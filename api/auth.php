@@ -45,6 +45,12 @@ switch ($action) {
     case 'disable-mfa':
         handleDisableMFA();
         break;
+    case 'pending-mfa-setup':
+        handlePendingMFASetup();
+        break;
+    case 'pending-mfa-enable':
+        handlePendingMFAEnable();
+        break;
     case 'request-reset':
         handleRequestReset();
         break;
@@ -157,6 +163,24 @@ function handleLogin()
         ]);
     }
 
+    // Enforce MFA for staff roles (admin, manager, rider)
+    // Staff must enable MFA before they can fully access the system.
+    $staffRoles = ['admin', 'manager', 'rider'];
+    if (in_array($user['role'], $staffRoles, true) && empty($user['mfa_enabled'])) {
+        // Set a limited session that only allows MFA setup
+        $mfaToken = bin2hex(random_bytes(16));
+        $_SESSION['mfa_setup_user_id'] = $user['id'];
+        $_SESSION['mfa_setup_token'] = $mfaToken;
+        $_SESSION['mfa_setup_timestamp'] = time();
+
+        jsonResponse([
+            'success' => true,
+            'mfa_setup_required' => true,
+            'mfa_token' => $mfaToken,
+            'message' => 'Two-factor authentication is required for staff accounts. Please set it up now.'
+        ]);
+    }
+
     // No MFA — login directly
     setUserSession($user);
     jsonResponse([
@@ -204,10 +228,16 @@ function handleVerifyMFA()
         jsonResponse(['success' => false, 'message' => 'User not found'], 404);
     }
 
-    // Verify TOTP code
-    if (!TOTP::verifyCode($user['totp_secret'], $code)) {
-        jsonResponse(['success' => false, 'message' => 'Invalid authenticator code. Please try again.'], 401);
+    // Verify TOTP code with replay protection
+    $lastUsedSlice = $user['totp_last_used_slice'] !== null ? (int)$user['totp_last_used_slice'] : null;
+    $matchedSlice = TOTP::verifyCode($user['totp_secret'], $code, $lastUsedSlice);
+    if ($matchedSlice === false) {
+        jsonResponse(['success' => false, 'message' => 'Invalid or already-used authenticator code. Please wait for a new code.'], 401);
     }
+
+    // Save the used slice to prevent replay attacks
+    $stmt = $db->prepare("UPDATE users SET totp_last_used_slice = ? WHERE id = ?");
+    $stmt->execute([$matchedSlice, $user['id']]);
 
     // MFA verified — clean up and set session
     unset($_SESSION['mfa_pending_user_id'], $_SESSION['mfa_token'], $_SESSION['mfa_timestamp']);
@@ -275,14 +305,106 @@ function handleEnableMFA()
         jsonResponse(['success' => false, 'message' => 'Please set up MFA first'], 400);
     }
 
-    if (!TOTP::verifyCode($row['totp_secret'], $code)) {
+    // Verify with replay protection (no last_used yet during initial setup)
+    $matchedSlice = TOTP::verifyCode($row['totp_secret'], $code);
+    if ($matchedSlice === false) {
         jsonResponse(['success' => false, 'message' => 'Invalid code. Please try again.'], 400);
     }
 
-    $stmt = $db->prepare("UPDATE users SET mfa_enabled = 1 WHERE id = ?");
-    $stmt->execute([$user['id']]);
+    // Enable MFA and record the used slice
+    $stmt = $db->prepare("UPDATE users SET mfa_enabled = 1, totp_last_used_slice = ? WHERE id = ?");
+    $stmt->execute([$matchedSlice, $user['id']]);
 
     jsonResponse(['success' => true, 'message' => 'MFA enabled successfully! You will need your authenticator for future logins.']);
+}
+
+// ===================================
+// PENDING MFA SETUP (for staff first login)
+// Works with mfa_setup_user_id session, not full session.
+// ===================================
+function handlePendingMFASetup()
+{
+    if (empty($_SESSION['mfa_setup_user_id']) || empty($_SESSION['mfa_setup_token'])) {
+        jsonResponse(['success' => false, 'message' => 'No pending MFA setup. Please log in again.'], 401);
+    }
+    if (time() - ($_SESSION['mfa_setup_timestamp'] ?? 0) > 600) {
+        unset($_SESSION['mfa_setup_user_id'], $_SESSION['mfa_setup_token'], $_SESSION['mfa_setup_timestamp']);
+        jsonResponse(['success' => false, 'message' => 'Setup session expired. Please log in again.'], 401);
+    }
+
+    $userId = $_SESSION['mfa_setup_user_id'];
+    $db = getDB();
+    $stmt = $db->prepare("SELECT id, email, role FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch();
+    if (!$user) {
+        jsonResponse(['success' => false, 'message' => 'User not found'], 404);
+    }
+
+    $secret = TOTP::generateSecret();
+    $stmt = $db->prepare("UPDATE users SET totp_secret = ? WHERE id = ?");
+    $stmt->execute([$secret, $userId]);
+
+    $qrUrl = TOTP::getQRCodeUrl($user['email'], $secret);
+
+    jsonResponse([
+        'success' => true,
+        'secret' => $secret,
+        'qr_url' => $qrUrl,
+        'email' => $user['email']
+    ]);
+}
+
+function handlePendingMFAEnable()
+{
+    if (empty($_SESSION['mfa_setup_user_id']) || empty($_SESSION['mfa_setup_token'])) {
+        jsonResponse(['success' => false, 'message' => 'No pending MFA setup. Please log in again.'], 401);
+    }
+
+    $code = trim($_POST['code'] ?? '');
+    $token = trim($_POST['mfa_token'] ?? '');
+    if (empty($code) || empty($token) || $token !== $_SESSION['mfa_setup_token']) {
+        jsonResponse(['success' => false, 'message' => 'Invalid setup token or missing code'], 400);
+    }
+
+    $userId = $_SESSION['mfa_setup_user_id'];
+    $db = getDB();
+    $stmt = $db->prepare("SELECT * FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch();
+    if (!$user || empty($user['totp_secret'])) {
+        jsonResponse(['success' => false, 'message' => 'Setup not initialized. Please scan the QR first.'], 400);
+    }
+
+    $matchedSlice = TOTP::verifyCode($user['totp_secret'], $code);
+    if ($matchedSlice === false) {
+        jsonResponse(['success' => false, 'message' => 'Invalid code. Please try again.'], 400);
+    }
+
+    // Enable MFA, save used slice, then create the full session
+    $stmt = $db->prepare("UPDATE users SET mfa_enabled = 1, totp_last_used_slice = ? WHERE id = ?");
+    $stmt->execute([$matchedSlice, $userId]);
+
+    unset($_SESSION['mfa_setup_user_id'], $_SESSION['mfa_setup_token'], $_SESSION['mfa_setup_timestamp']);
+
+    // Refresh user data and set session
+    $stmt = $db->prepare("SELECT * FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch();
+    setUserSession($user);
+
+    logAudit('mfa_enabled', 'user', $userId, 'Staff account MFA enabled (mandatory)');
+
+    jsonResponse([
+        'success' => true,
+        'message' => 'MFA enabled. Welcome!',
+        'user' => [
+            'id' => $user['id'],
+            'name' => $user['name'],
+            'email' => $user['email'],
+            'role' => $user['role']
+        ]
+    ]);
 }
 
 // ===================================
@@ -304,11 +426,24 @@ function handleDisableMFA()
     $stmt->execute([$user['id']]);
     $row = $stmt->fetch();
 
-    if (!TOTP::verifyCode($row['totp_secret'], $code)) {
-        jsonResponse(['success' => false, 'message' => 'Invalid code'], 400);
+    // Disabling MFA also requires a fresh (unused) code
+    $stmt2 = $db->prepare("SELECT totp_last_used_slice FROM users WHERE id = ?");
+    $stmt2->execute([$user['id']]);
+    $lastUsed = $stmt2->fetchColumn();
+    $lastUsedSlice = $lastUsed !== null && $lastUsed !== false ? (int)$lastUsed : null;
+
+    if (TOTP::verifyCode($row['totp_secret'], $code, $lastUsedSlice) === false) {
+        jsonResponse(['success' => false, 'message' => 'Invalid or already-used code'], 400);
     }
 
-    $stmt = $db->prepare("UPDATE users SET mfa_enabled = 0, totp_secret = NULL WHERE id = ?");
+    // Block staff from disabling MFA (it is mandatory for them)
+    $u = getCurrentUser();
+    $staffRoles = ['admin', 'manager', 'rider'];
+    if (in_array($u['role'] ?? '', $staffRoles, true)) {
+        jsonResponse(['success' => false, 'message' => 'MFA is required for staff accounts and cannot be disabled.'], 403);
+    }
+
+    $stmt = $db->prepare("UPDATE users SET mfa_enabled = 0, totp_secret = NULL, totp_last_used_slice = NULL WHERE id = ?");
     $stmt->execute([$user['id']]);
 
     jsonResponse(['success' => true, 'message' => 'MFA has been disabled']);

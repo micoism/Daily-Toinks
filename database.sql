@@ -26,9 +26,11 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified TINYINT(1) NOT NULL DEFAULT 0,
     email_token VARCHAR(100) DEFAULT NULL,
     email_token_expires TIMESTAMP NULL DEFAULT NULL,
-    -- MFA / Two-Factor Authentication
+    -- MFA / Two-Factor Authentication (Google Authenticator TOTP)
     mfa_enabled TINYINT(1) NOT NULL DEFAULT 0,
-    mfa_secret VARCHAR(100) DEFAULT NULL,
+    totp_secret VARCHAR(100) DEFAULT NULL,
+    -- Track last used time slice to prevent code reuse/replay attacks
+    totp_last_used_slice BIGINT DEFAULT NULL,
     -- Account lockout
     failed_logins INT NOT NULL DEFAULT 0,
     locked_until TIMESTAMP NULL DEFAULT NULL,

@@ -222,14 +222,27 @@ class TOTP {
     }
     
     /**
-     * Verify a TOTP code (with ±1 time window tolerance)
+     * Verify a TOTP code with replay protection.
+     * @param string $secret  TOTP secret
+     * @param string $code    6-digit code from authenticator
+     * @param int|null $lastUsedSlice Last successfully used time slice (replay prevention)
+     * @param int $discrepancy ±N time slices tolerance for clock drift
+     * @return int|false Returns the matched time slice on success, or false on failure
      */
-    public static function verifyCode($secret, $code, $discrepancy = 1) {
+    public static function verifyCode($secret, $code, $lastUsedSlice = null, $discrepancy = 1) {
         $currentSlice = floor(time() / 30);
-        
+        $padded = str_pad($code, 6, '0', STR_PAD_LEFT);
+
         for ($i = -$discrepancy; $i <= $discrepancy; $i++) {
-            if (self::getCode($secret, $currentSlice + $i) === str_pad($code, 6, '0', STR_PAD_LEFT)) {
-                return true;
+            $slice = $currentSlice + $i;
+
+            // Replay protection: reject any slice already used (or older)
+            if ($lastUsedSlice !== null && $slice <= $lastUsedSlice) {
+                continue;
+            }
+
+            if (self::getCode($secret, $slice) === $padded) {
+                return $slice;
             }
         }
         return false;

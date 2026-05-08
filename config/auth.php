@@ -135,6 +135,25 @@ function isStaffUser() {
  */
 function requireRole($allowedRoles, $redirect = '/normss/login.php') {
     requireLogin($redirect);
+
+    // Enforce MFA for staff: if a staff user is logged in without MFA enabled,
+    // force them to set it up before accessing any admin page (except setup page itself).
+    $staffRoles = ['admin', 'manager', 'rider'];
+    $currentRole = $_SESSION['user_role'] ?? '';
+    $isOnSetupPage = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/mfa-setup-required.php') !== false;
+    if (in_array($currentRole, $staffRoles, true) && !$isOnSetupPage) {
+        try {
+            $_db = getDB();
+            $_stmt = $_db->prepare("SELECT mfa_enabled FROM users WHERE id = ?");
+            $_stmt->execute([$_SESSION['user_id']]);
+            $_mfa = (int) $_stmt->fetchColumn();
+            if ($_mfa !== 1) {
+                header('Location: /normss/admin/mfa-setup-required.php');
+                exit;
+            }
+        } catch (Exception $_e) { /* fall through */ }
+    }
+
     if (!in_array($_SESSION['user_role'], $allowedRoles)) {
         http_response_code(403);
         echo '<!DOCTYPE html><html><head><title>Access Denied</title>

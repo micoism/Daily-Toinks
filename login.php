@@ -199,6 +199,15 @@ $pageTitle = "Login";
                     return;
                 }
 
+                // Staff MFA setup required (first-time login for admin/manager/rider)
+                if (result.mfa_setup_required) {
+                    window.DailyToinks.showNotification(result.message || 'MFA setup required', 'info');
+                    setTimeout(() => {
+                        window.location.href = '/normss/admin/mfa-setup.php';
+                    }, 600);
+                    return;
+                }
+
                 successMsg.textContent = 'Login successful! Redirecting...';
                 successMsg.style.display = 'block';
                 window.DailyToinks.showNotification('Welcome back!', 'success');
