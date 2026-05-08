@@ -204,11 +204,17 @@ $mfaToken = $_SESSION['mfa_setup_token'];
         const mfaToken = <?php echo json_encode($mfaToken); ?>;
 
         // Load setup data on page load
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
         async function loadSetup() {
             const fd = new FormData();
             fd.append('action', 'pending-mfa-setup');
+            fd.append('csrf_token', csrfToken);
             try {
-                const res = await fetch('/normss/api/auth.php', { method: 'POST', body: fd });
+                const res = await fetch('/normss/api/auth.php', {
+                    method: 'POST', body: fd,
+                    headers: { 'X-CSRF-Token': csrfToken }
+                });
                 const data = await res.json();
                 if (!data.success) {
                     alert(data.message || 'Failed to load setup');
@@ -242,9 +248,13 @@ $mfaToken = $_SESSION['mfa_setup_token'];
             fd.append('action', 'pending-mfa-enable');
             fd.append('code', code);
             fd.append('mfa_token', mfaToken);
+            fd.append('csrf_token', csrfToken);
 
             try {
-                const res = await fetch('/normss/api/auth.php', { method: 'POST', body: fd });
+                const res = await fetch('/normss/api/auth.php', {
+                    method: 'POST', body: fd,
+                    headers: { 'X-CSRF-Token': csrfToken }
+                });
                 const data = await res.json();
                 if (data.success) {
                     setTimeout(() => { window.location.href = '/normss/admin/index.php'; }, 600);
